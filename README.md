@@ -1,1 +1,1 @@
-# common-lisp-slade-2019
+# Exercise solutions (2019) for Stephen Slade's book Object-Oriented Common Lisp
