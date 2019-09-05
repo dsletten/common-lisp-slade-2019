@@ -297,6 +297,9 @@
 ;;;
 (defun wild-card-p (obj)
   (eq obj '*wild*))
+;;
+;;    Essentially the same as 2nd version from 2010.
+;;    
 (defun matchp (pattern target)
   (cond ((endp pattern) (endp target))
         ((endp target) (and (wild-card-p (first pattern))

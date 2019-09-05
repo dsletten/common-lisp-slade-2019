@@ -1,0 +1,6 @@
+Mary        Jones       345-9090    123  Pine Street
+Deborah     Smith       782-1245    456  Elm Street, 12-B
+Susan       Brown       889-4321    789  Maple Street
+Jane        Smith       345-7766    1212 Grove Terrace
+Mary        White       889-3758    321  Avenue of Trees
+Louise      Brown       782-3299    43   Oak Drive
