@@ -32,38 +32,68 @@
 
 (in-package :ch08)
 
+
+;;;
+;;;    8.7.2 Quine (See ~/lisp/programs/quine.lisp)
+;;;
+((lambda (l) (list l (list 'quote l)))
+ '(lambda (l) (list l (list 'quote l))))
+
+; Test it!! (equal + *)
+
 ;;;
 ;;;    8.7.3
+;;;    Work backward from end of string to create circular list of its chars.
 ;;;
 (defun make-circular-key (key)
-  (labels ((construct (i result tail)
-             (cond ((minusp i) (setf (rest tail) result)
+  (assert (string/= key ""))
+  (labels ((construct (i result final)
+             (cond ((minusp i) (setf (rest final) result)
                     result)
-                   (t (construct (1- i) (cons (char key i) result) tail)))) )
+                   (t (construct (1- i) (cons (char key i) result) final)))) )
     (let* ((i (1- (length key)))
-           (tail (list (char key i))))
-      (construct (1- i) tail tail))))
+           (final (list (char key i))))
+      (construct (1- i) final final))))
 
 (defun make-circular-key (key)
-  (labels ((construct (i result tail)
+  (assert (string/= key ""))
+  (labels ((construct (i result final)
              (push (char key i) result)
              (if (zerop i)
-                 (setf (rest tail) result)
-                 (construct (1- i) result tail))))
+                 (setf (rest final) result)
+                 (construct (1- i) result final))))
     (let* ((i (1- (length key)))
-           (tail (list (char key i))))
-      (construct (1- i) tail tail))))
+           (final (list (char key i))))
+      (if (zerop i) ; D'oh! Special corner case...
+          (progn (setf (rest final) final)
+                 final)
+          (construct (1- i) final final)))) )
 
-;; (defun make-circular-key (key)
-;;   (let* ((last (1- (length key)))
-;;          (tail (list (char key last)))
-;;          (result tail))
-;;     (loop for i from (1- last) downto 0
-;;          do (push (char key i) result)
-;;          finally (setf (rest tail) result))
-;;     result))
+(defun make-circular-key (key)
+  (assert (string/= key ""))
+  (let* ((last (1- (length key)))
+         (final (list (char key last)))
+         (result final))
+    (loop for i from (1- last) downto 0
+          do (push (char key i) result)
+          finally (setf (rest final) result))
+    result))
+
+(defun check-circular-key (s)
+  (let ((length (length s))
+        (circle (make-circular-key s)))
+    (string= s
+             (coerce (loop repeat length
+                           collect (pop circle))
+                     'string))))
+
+(deftest test-make-circular-key ()
+  (check
+   (check-circular-key "Is this not pung?")
+   (check-circular-key "x")))
 
 (defun make-key-stream-reader (key)
+  "Return a closure over the string KEY that implements an endless stream of chars cycling from that string."
   (let ((stream (make-string-input-stream key)))
   #'(lambda ()
       (unless (listen stream)
@@ -71,10 +101,18 @@
       (read-char stream))))
 
 (defun string-encode (plain-text key divisor)
+  "Encode PLAIN-TEXT with the characters of the text KEY modified by DIVISOR."
   (let ((reader (make-key-stream-reader key)))
     (with-output-to-string (encoded)
       (dotimes (i (length plain-text))
         (write-char (encode-char (char plain-text i) (funcall reader) divisor) encoded)))) )
+
+(defun string-encode (plain-text key divisor)
+  "Encode PLAIN-TEXT with the characters of the text KEY modified by DIVISOR."
+  (let ((reader (make-key-stream-reader key)))
+    (with-output-to-string (encoded)
+      (loop for ch across plain-text
+            do (write-char (encode-char ch (funcall reader) divisor) encoded)))) )
 
 (defun string-encode (plain-text key divisor)
   (map 'string #'(lambda (ch1 ch2) (encode-char ch1 ch2 divisor)) plain-text (make-circular-key key)))
@@ -83,6 +121,7 @@
   (code-char (+ (char-code ch1) (rem (char-code ch2) m))))
 
 (defun string-decode (encoded-text key divisor)
+  "Decode ENCODED-TEXT using the characters of KEY modified by DIVISOR."
   (let ((reader (make-key-stream-reader key)))
     (with-output-to-string (plain)
       (dotimes (i (length encoded-text))
@@ -155,3 +194,15 @@
                  (cons (cons elt (first set1))
                        (layer (rest set1)))) ))
     (layer set)))
+
+(defun set-equal (s1 s2)
+  (and (subsetp s1 s2 :test #'equal)
+       (subsetp s2 s1 :test #'equal)))
+
+(deftest test-power-set ()
+  (check
+   (set-equal (power '()) '(NIL))
+   (set-equal (power '(a)) '((A) NIL))
+   (set-equal (power '(a b)) '((A B) (A) (B) NIL))
+   (set-equal (power '(a b c)) '((A B C) (A B) (A C) (A) (B C) (B) (C) NIL))
+   (set-equal (power '(a b c d)) '((A B C D) (A B C) (A B D) (A B) (A C D) (A C) (A D) (A) (B C D) (B C) (B D) (B) (C D) (C) (D) NIL))))
