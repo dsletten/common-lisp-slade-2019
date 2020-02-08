@@ -1,0 +1,11 @@
+Notes on implementing queues.
+
+See TR91-04.pdf for Lisp notes on queues. (Old notes A-46)
+
+This article (part 3) discussed TCONC data structure (tail concatenate) which keeps pointers to both front and rear of the queue.
+
+PAIP pg. 342 discusses the same material (Norvig co-authored the technical report above). Wilenksy pg. 273 also discusses TCONCs. Furthermore, the book _Mastering Algorithms with Perl_ (pg. 52) effectively implements a queue using a TCONC without explicitly naming it.
+
+Another family of queues is used in functional programming. These are "persistent" queues that don't rely on side effects. Consequently, the old queue is still available even after an enqueue/dequeue operations, which share structure. CTMCP introduces such queues in Oz in section 3.4.5 (pg. 145) (Especially pg. 147).
+
+CTMCP references Okasaki's book.

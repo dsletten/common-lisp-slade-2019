@@ -44,7 +44,7 @@
   (make-instance 'property-table :name name))
 
 ;;;
-;;;    Implicitly creates (empty) property-list for a missing SYMBOL.
+;;;    Implicitly creates (empty) property-list (a-list!) for a missing SYMBOL.
 ;;;    
 (defgeneric lookup (property-table symbol)
   (:documentation "Retrieve the properties associated with a given SYMBOL."))
