@@ -97,6 +97,9 @@
         (t (cons (simple-eval (car exp) env)
                  (simple-eval-list (cdr exp) env)))) )
 
+;;;
+;;;    Only LAMBDA really needs ENV here?! It may add new bindings to the environment in which its body is evaluated.
+;;;    
 (defun simple-apply (proc args env)
   (cond ((null proc) (error "Whaaa?"))
         ((atom proc)
@@ -122,12 +125,7 @@
            (print (expected-args 1 args)
                   (print (first args)))
            (= (expected-args 1 args :count :at-least) ; Refactor. Same structure: = < > <= >= and + * and / -
-              (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                (if y-supplied-p
-                    (and (= x y) 
-                         (or (null more)
-                             (simple-apply proc (cons y more) env)))
-                    t)))
+	      (relational #'= args))
            ;; (/= (expected-args 1 args :count :at-least)
            ;;     (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
            ;;    (if y-supplied-p
@@ -140,68 +138,24 @@
                  (if y-supplied-p
                      (if (null more)
                          (/= x y) 
-                         (every #'identity (simple-eval-list (mapcon #'(lambda (l) (mapcar #'(lambda (elt) (list proc (first l) elt)) (rest l))) args) env)))
+                         (every #'identity (simple-eval-list (mapcon #'(lambda (l) (mapcar #'(lambda (elt) (list proc (first l) elt)) (rest l))) args) env))) ; Don't really need ENV. All args eval'd already.
                      t)))
            (< (expected-args 1 args :count :at-least)
-              (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                (if y-supplied-p
-                    (and (< x y) 
-                         (or (null more)
-                             (simple-apply proc (cons y more) env)))
-                    t)))
+	      (relational #'< args))
            (<= (expected-args 1 args :count :at-least)
-               (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                 (if y-supplied-p
-		     (and (<= x y) 
-			  (or (null more)
-			      (simple-apply proc (cons y more) env)))
-                     t)))
+	       (relational #'<= args))
            (> (expected-args 1 args :count :at-least)
-              (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                (if y-supplied-p
-                    (and (> x y) 
-                         (or (null more)
-                             (simple-apply proc (cons y more) env)))
-                    t)))
+	      (relational #'> args))
            (>= (expected-args 1 args :count :at-least)
-	       (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                 (if y-supplied-p
-		     (and (>= x y) 
-			  (or (null more)
-			      (simple-apply proc (cons y more) env)))
-                     t)))
+	       (relational #'>= args))
            (+ (expected-args 0 args :count :at-least)
-              (destructuring-bind (&optional (x nil x-supplied-p) (y nil y-supplied-p) &rest more) args ; Proper left fold
-                (if x-supplied-p
-                    (if y-supplied-p
-                        (if (null more)
-                            (+ x y)
-                            (simple-apply proc (cons (+ x y) more) env))
-                        x)
-                    addition-identity)))
+	      (arithmetic-0 #'+ args addition-identity))
            (- (expected-args 1 args :count :at-least)
-              (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                (if y-supplied-p
-                    (if (null more)
-                        (- x y)
-                        (simple-apply proc (cons (- x y) more) env))
-                    (- x))))
+	      (arithmetic-1 #'- args))
            (* (expected-args 0 args :count :at-least)
-              (destructuring-bind (&optional (x nil x-supplied-p) (y nil y-supplied-p) &rest more) args
-                (if x-supplied-p
-                    (if y-supplied-p
-                        (if (null more)
-                            (* x y)
-                            (simple-apply proc (cons (* x y) more) env))
-                        x)
-                    multiplication-identity)))
+	      (arithmetic-0 #'* args multiplication-identity))
            (/ (expected-args 1 args :count :at-least)
-              (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
-                (if y-supplied-p
-                    (if (null more)
-                        (/ x y)
-                        (simple-apply proc (cons (/ x y) more) env))
-                    (/ x))))
+	      (arithmetic-1 #'/ args))
            (otherwise (simple-apply (simple-eval proc env) args env)))) ; Must find function definition in environment.
         ((eq (car proc) 'lambda)
          (destructuring-bind (lambda-params . body) (rest proc)
@@ -227,13 +181,45 @@
     (:exact (assert (= (length args) n) (n args) "Function called with wrong number of args: ~D (Expected ~D)" (length args) n))
     (:at-least (assert (>= (length args) n) (n args) "Function called with wrong number of args: ~D (Expected ≥ ~D)" (length args) n))))
 
-(defun relational (op args env)
+;;;
+;;;    Relational operator that accepts 1+ args (=, <, >, <=, >=)
+;;;    For > 2 args, underlying operator is applied pairwise to args from L to R.
+;;;    
+(defun relational (op args)
   (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
     (if y-supplied-p
 	(and (funcall op x y) 
 	     (or (null more)
-		 (relational op (cons y more) env)))
+		 (relational op (cons y more))))
         t)))
+
+;;;
+;;;    Arithmetic operator that accepts 0+ args (+, *) with appropriate identity for 0 args.
+;;;    Single arg returned "as is".
+;;;    For > 2 args, underlying operator is applied pairwise to args from L to R.
+;;;    
+(defun arithmetic-0 (op args identity)
+  (destructuring-bind (&optional (x nil x-supplied-p) (y nil y-supplied-p) &rest more) args
+    (if x-supplied-p
+  	(if y-supplied-p
+  	    (if (null more)
+  		(funcall op x y)
+  	        (arithmetic-0 op (cons (funcall op x y) more) identity))
+  	    x)
+        identity)))
+
+;;;
+;;;    Arithmetic operator that accepts 1+ args (-, /).
+;;;    Single arg evaluates to appropriate inverse.
+;;;    For > 2 args, underlying operator is applied pairwise to args from L to R.
+;;;    
+(defun arithmetic-1 (op args)
+  (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
+    (if y-supplied-p
+	(if (null more)
+	    (funcall op x y)
+	    (arithmetic-1 op (cons (funcall op x y) more)))
+        (funcall op x))))
 
 ;;;
 ;;;    Add corresponding param/value pairs to front of environment.
