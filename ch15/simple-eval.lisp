@@ -199,14 +199,7 @@
 ;;;    For > 2 args, underlying operator is applied pairwise to args from L to R.
 ;;;    
 (defun arithmetic-0 (op args identity)
-  (destructuring-bind (&optional (x nil x-supplied-p) (y nil y-supplied-p) &rest more) args
-    (if x-supplied-p
-  	(if y-supplied-p
-  	    (if (null more)
-  		(funcall op x y)
-  	        (arithmetic-0 op (cons (funcall op x y) more) identity))
-  	    x)
-        identity)))
+  (arithmetic-1 op (if (null args) (list identity) args)))
 
 ;;;
 ;;;    Arithmetic operator that accepts 1+ args (-, /).
