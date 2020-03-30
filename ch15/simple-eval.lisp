@@ -37,32 +37,41 @@
 (defconstant addition-identity 0)
 (defconstant multiplication-identity 1)
 
+;;;    TODO: lambda, and, or
+
 ;;;
 ;;;    ENV is dotted-pair alist of "bindings". See TEST-SIMPLE-EVAL below.
 ;;;    CLHS 3.1.2.1 Form Evaluation
 ;;;    Forms fall into three categories: symbols, conses, and self-evaluating objects.
 ;;;    
 (defun simple-eval (exp &optional env)
-  (cond ((consp exp)
-         (cond ((simple-special-operator-p (first exp)) ; Consider macros as special operators...
-                (special-eval exp env))
-               ;; ((lambda-expression-p exp)
-               ;;       (simple-lambda exp env))
-               (t (simple-apply (first exp) (simple-eval-list (rest exp) env) env)))) ; Arbitrary function
+  (cond ((consp exp) ; Four flavors of CONS as form: special form/macro form/function form (symbol is CAR) or lambda form
+	 (destructuring-bind (operator . args) exp
+           (cond ((symbolp operator)
+		  (if (simple-special-operator-p operator) ; Consider macros as special operators...
+		      (special-eval operator args env)
+		      (simple-apply operator (simple-eval-list args env) env))) ; Arbitrary function
+		 ((and (consp operator) (eq (first operator) 'lambda))
+		  (destructuring-bind (lambda-list . body) (rest operator)
+		    (let ((env1 (augment-environment lambda-list args env)))
+		      (do ((body (rest body) (rest body))
+			   (result (simple-eval (first body) env1) (simple-eval (first body) env1)))
+			  ((endp body) result)))) )
+		 (t (error "Malformed cons form: ~S" exp)))) )
         ((constantp exp) exp) ; Self-evaluating
-        ((atom exp) (simple-env-lookup exp env)) ; Symbols???
-        (t (error "How did we get here?!?"))))
+        ((symbolp exp) (simple-env-lookup exp env))
+        (t (error "How did we get here?!? This is not Lisp: ~S" exp))))
 
 (defun simple-special-operator-p (obj)
   (case obj
     ((quote cond if and or) t)
     (otherwise nil)))
 
-(defun special-eval (exp env)
-  (ecase (first exp)
-    (quote (if (null (rest (rest exp))) (second exp) (error "Wrong number of arguments for QUOTE.")))
-    (cond (simple-eval-cond (rest exp) env))
-    (if (simple-eval-if (rest exp) env))
+(defun special-eval (operator args env)
+  (ecase operator
+    (quote (expected-args 1 args :msg "wrong number of args to QUOTE:") (first args))
+    (cond (simple-cond args env))
+    (if (simple-if args env))
     (and)
     (or)))
 
@@ -73,7 +82,7 @@
 ;;;    Evaluate list of test clauses.
 ;;;    Must include final T clause!! <-- Nope
 ;;;    
-(defun simple-eval-cond (body env)
+(defun simple-cond (body env)
   (cond ((null body) nil)
         (t (destructuring-bind ((test . clauses) . more) body
              (if (simple-eval test env) 
@@ -84,9 +93,9 @@
 ;                  (simple-eval clause env))
 ;                (simple-eval-list clauses env)
 ;                (progn (simple-eval clause env) (simple-eval-
-                 (simple-eval-cond more env)))) ))
+                 (simple-cond more env)))) ))
 
-(defun simple-eval-if (body env)
+(defun simple-if (body env)
   (destructuring-bind (test then &optional else) body
     (if (simple-eval test env)
         (simple-eval then env)
@@ -124,7 +133,7 @@
                    (equalp (first args) (second args)))
            (print (expected-args 1 args)
                   (print (first args)))
-           (= (expected-args 1 args :count :at-least) ; Refactor. Same structure: = < > <= >= and + * and / -
+           (= (expected-args 1 args :count :at-least)
 	      (relational #'= args))
            ;; (/= (expected-args 1 args :count :at-least)
            ;;     (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
@@ -176,10 +185,10 @@
         ((eq (car proc) 'defun) ; Fix!
          (simple-apply (caddr proc) args (cons (cons (cadr proc) (caddr proc)) env)))) )
 
-(defun expected-args (n args &key (count :exact))
+(defun expected-args (n args &key (count :exact) (msg "Operator called with wrong number of args:"))
   (case count
-    (:exact (assert (= (length args) n) (n args) "Function called with wrong number of args: ~D (Expected ~D)" (length args) n))
-    (:at-least (assert (>= (length args) n) (n args) "Function called with wrong number of args: ~D (Expected ≥ ~D)" (length args) n))))
+    (:exact (assert (= (length args) n) (n args) "~A ~D (Expected ~D)" msg (length args) n))
+    (:at-least (assert (>= (length args) n) (n args) "~A ~D (Expected ≥ ~D)" (length args) n))))
 
 ;;;
 ;;;    Relational operator that accepts 1+ args (=, <, >, <=, >=)
@@ -224,5 +233,3 @@
   (cond ((endp params) env)
         ((endp values) (acons (first params) nil (augment-environment (rest params) values env))) ; Final clause implicitly does this!!
         (t (acons (first params) (first values) (augment-environment (rest params) (rest values) env)))) )
-
-

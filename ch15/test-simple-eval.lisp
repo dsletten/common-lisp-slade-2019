@@ -37,6 +37,9 @@
 
 (deftest test-simple-eval ()
   (check
+   (= (simple-eval '((lambda (x) (+ x 1)) 9)) 10)
+   (= (simple-eval '((lambda (x) (+ x y)) 9) '((y . 3))) 12)
+   (= (simple-eval '((lambda (x) (f x 1)) 9) '((f . (lambda (x y) (+ x y)))) ) 10) ; This is evaluated in wrong place???? SIMPLE-APPLY vs. SIMPLE-EVAL...
    (equal (simple-eval 9) 9)
    (equal (simple-eval "pung") "pung")
    (equal (simple-eval #\a) #\a)
