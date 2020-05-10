@@ -26,7 +26,8 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-(load "/home/slytobias/lisp/packages/test.lisp")
+;(load "/home/slytobias/lisp/packages/test.lisp")
+(load "/Users/dsletten/lisp/packages/test.lisp")
 
 (defpackage :simple-eval-slade (:use :common-lisp :test))
 
@@ -36,7 +37,7 @@
   (cond ((numberp exp) exp) ;    Self-evaluating
         ((stringp exp) exp) ;    .
         ((characterp exp) exp) ; .
-        ((atom exp) (simple-env-lookup exp env))
+        ((atom exp) (simple-env-lookup exp env)) ; Lisp-1
         ((eq (car exp) 'quote) (cadr exp))                       ; Special operator (macros treated as such)
         ((eq (car exp) 'cond) (simple-eval-cond (cdr exp) env))  ; .
         (t (simple-apply (car exp) (simple-eval-list (cdr exp) env) env)))) ; Arbitrary function
@@ -52,6 +53,9 @@
   (cond ((simple-eval (caar exp) env) (simple-eval (cadar exp) env))
         (t (simple-eval-cond (cdr exp) env))))
 
+;;;
+;;;    Evaluate all args to a function form before applying the function.
+;;;    
 (defun simple-eval-list (exp env)
   (cond ((null exp) nil)
         (t (cons (simple-eval (car exp) env)
@@ -70,8 +74,11 @@
          (simple-eval (caddr proc)
                       (simple-pairlis (cadr proc) args env)))
         ((eq (car proc) 'defun)
-         (simple-apply (caddr proc) args (cons (cons (cadr proc) (caddr proc)) env)))) )
+         (simple-apply (caddr proc) args (cons (cons (cadr proc) (caddr proc)) env)))) ) ; Ad hoc add mapping to environment!!: name -> lambda expression
 
+;;;
+;;;    Augment an enviroment (via shadowing) by adding new bindings.
+;;;    
 (defun simple-pairlis (x y env)
   (cond ((null x) env)
         (t (cons (cons (car x) (car y))

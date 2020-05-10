@@ -156,6 +156,9 @@
           ((constantp form) form) ; Self-evaluating
           (t (error "How did we get here?!? This is not Lisp: ~S" form)))) )
 
+;;;
+;;;    SPECIAL-OPERATOR-P??
+;;;    
 (defun simple-special-operator-p (obj)
   (case obj
     ((quote function cond if and or progn let let* defun) t)
@@ -226,8 +229,8 @@
 ;;   (if (endp body)
 ;;       t
 ;;       (if (simple-eval (first body) env)
-;; 	  (simple-and (rest body) env)
-;; 	  nil)))
+;;    (simple-and (rest body) env)
+;;    nil)))
 
 ;; (and (gethash :foo (make-hash-table))) => NIL; NIL
 ;; (and (gethash :foo (make-hash-table)) 8) => NIL
@@ -252,8 +255,8 @@
 ;;   (if (endp body)
 ;;       nil
 ;;       (if (simple-eval (first body) env)
-;; 	  t
-;; 	  (simple-or (rest body) env))))
+;;    t
+;;    (simple-or (rest body) env))))
 
 ;; (simple-eval '(or (truncate 3 4))) => 0; 3
 ;; (simple-eval '(or (truncate 3 4) (> 2 3))) => 0
@@ -354,7 +357,7 @@
            (truncate (expected-args 1 args :count :at-least)
                      (apply #'truncate args))
            (= (expected-args 1 args :count :at-least)
-	      (relational #'= args))
+              (relational #'= args))
            ;; (/= (expected-args 1 args :count :at-least)
            ;;     (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
            ;;    (if y-supplied-p
@@ -367,24 +370,24 @@
                  (if y-supplied-p
                      (if (null more)
                          (/= x y) 
-                         (every #'identity (simple-eval-list (mapcon #'(lambda (l) (mapcar #'(lambda (elt) (list operator (first l) elt)) (rest l))) args) env))) ; Don't really need ENV. All args eval'd already.
+                         (every #'identity (simple-eval-list (mapcon #'(lambda (l) (mapcar #'(lambda (elt) (list operator (first l) elt)) (rest l))) args) env))) ; Don't really need ENV. All args eval'd already. Fix this!!
                      t)))
            (< (expected-args 1 args :count :at-least)
-	      (relational #'< args))
+              (relational #'< args))
            (<= (expected-args 1 args :count :at-least)
-	       (relational #'<= args))
+               (relational #'<= args))
            (> (expected-args 1 args :count :at-least)
-	      (relational #'> args))
+              (relational #'> args))
            (>= (expected-args 1 args :count :at-least)
-	       (relational #'>= args))
+               (relational #'>= args))
            (+ (expected-args 0 args :count :at-least)
-	      (arithmetic-0 #'+ args addition-identity))
+              (arithmetic-0 #'+ args addition-identity))
            (- (expected-args 1 args :count :at-least)
-	      (arithmetic-1 #'- args))
+              (arithmetic-1 #'- args))
            (* (expected-args 0 args :count :at-least)
-	      (arithmetic-0 #'* args multiplication-identity))
+              (arithmetic-0 #'* args multiplication-identity))
            (/ (expected-args 1 args :count :at-least)
-	      (arithmetic-1 #'/ args))
+              (arithmetic-1 #'/ args))
            (otherwise (let ((f (simple-eval operator env))) ; Must find function definition in environment.
                         (if (null f)
                             (error "undefined function ~S" operator)
@@ -407,9 +410,9 @@
 (defun relational (op args)
   (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
     (if y-supplied-p
-	(and (funcall op x y) 
-	     (or (null more)
-		 (relational op (cons y more))))
+    (and (funcall op x y) 
+         (or (null more)
+         (relational op (cons y more))))
         t)))
 
 ;;;
@@ -428,9 +431,9 @@
 (defun arithmetic-1 (op args)
   (destructuring-bind (x &optional (y nil y-supplied-p) &rest more) args
     (if y-supplied-p
-	(if (null more)
-	    (funcall op x y)
-	    (arithmetic-1 op (cons (funcall op x y) more)))
+        (if (null more)
+            (funcall op x y)
+            (arithmetic-1 op (cons (funcall op x y) more)))
         (funcall op x))))
 
 ;;;

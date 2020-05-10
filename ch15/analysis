@@ -1,0 +1,104 @@
+Slade presents two pseudo-implementations of EVAL: SIMPLE-EVAL and CL-EVAL
+
+At first glance, the two versions should simply differ in how they implement environments in which bindings are located. But they are each implemented idiosyncratically.
+
+SIMPLE-EVAL uses an association list onto which new bindings may be added possibly shadowing existing bindings for a given identifier. 
+
+CL-EVAL on the other hand defines a class ENVIRONMENT that represents a binding between an identifier and a value as well as a link to the "next" binding in the chain. "Local" bindings
+can temporarily be added to the front (similar to the alist of SIMPLE-EVAL). But non-local bindings can also be added to an environment after the current binding. This causes a destructive modification to the
+chain of bindings that represents the environment (Is this semantically reasonable? It's possible that the binding buries itself behind other potential bindings of the same identifier making itself invisible?)
+
+Moreover, both implementations define Lisp-1 languages. The environment in each case does not have separate variable and function namespaces. Bindings added to either type of environment can be haphazardly interpreted as
+variables or functions depending on the context. Consequently, there is no need to implement FUNCALL. Both DEFUN/SETQ can associate a function value (actually LAMBDA expression) with a given symbol. The function is then
+invoked simply by placing the symbol as the CAR of a function form. Always (F X) rather than (FUNCALL F X).
+
+Neither version handles multiple values either.
+
+Each version has a top-level function (SIMPLE-EVAL/CL-EVAL) that performs initial analysis of the form passed to it. Each implementation blurs the distinction between special forms and macros. There is no attempt to perform
+a macroexpansion. Special forms and macros are simply routed to different helper functions different from the one used to process function forms. In other words, this highlights the nature of special operators. They have hard-wired
+special behavior with different evaluation rules than functions.
+
+The inconsistency of the two implements starts at the top. Roughly speaking, both attempt to weed out non-CONSes first but in idiosyncratic ways. Both treat numbers, strings, and characters as self-evaluating objects and
+simply return the expression itself as the result of evaluating such a form. But CL-EVAL also lumps function objects in with the self-evaluating objects. (No way to actually get a function object into a binding though?? Code
+does not handle #', i.e., (FUNCTION ) properly...)
+
+Following this, both handle variable references. However, SIMPLE-EVAL is looking for atoms (thus a vector would match) whereas CL-EVAL tests for symbols. Each version then attempts to look up the value of these identifiers
+in the given environment. No allowance is made for subtleties such as keywords or constant variables (T, NIL, PI, ...).
+
+SIMPLE-EVAL merely looks in the environment (alist) to locate the value of a symbol (atom!). CL-EVAL tries to look through the chain of bindings. If this fails, it looks at built-in symbols (both BOUNDP/FBOUNDP) to
+find a value of a variable or function.
+
+At this point, SIMPLE-EVAL peters out quickly. It is only hardwired to handle special operator QUOTE and macro COND. Every other CONS expression is considered to be a function form and is sent to SIMPLE-APPLY for invocation. (In
+particular, it doesn't even handle IF or LET...)
+
+CL-EVAL instead has a large number of special operators to match, each dispatching to its own auxiliary function, e.g., LET -> CL-EVAL-LET. Its default final case sends function forms to CL-EVAL-CALL.
+
+Before invoking function forms, each version of course has to evaluate all of the arguments passed to the function. And of course they use two different approaches to do so. SIMPLE-EVAL has a recursive funtion SIMPLE-EVAL-LIST
+that evaluates each arg in turn and accumulates the results. CL-EVAL on the other hand simply relies on MAPCAR to accomplish the same thing, mapping the list of argument forms to a list of values.
+
+The two versions diverge substantially here with function forms. SIMPLE-EVAL defines a rather elaborate function SIMPLE-APPLY that attempts to match the CAR of the form to its implementation. 
+
+In most cases, this is an atom that names a function. A fixed number of built-in funtion names are checked (CAR, CDR, CONS, EQ, ...). If no match is found a binding for the function name is consulted in the environment (a
+recursive call to SIMPLE-EVAL).
+
+In the case where the CAR of the form is instead a CONS, SIMPLE-APPLY is wired to handle 2 cases.
+
+The first is when the CAR is a lambda expression. Here SIMPLE-APPLY generates an augmented environment by adding bindings for the parameters in the lambda list with the corresponding values passed in the form. 
+But then SIMPLE-APPLY falls flat, it merely (recursively) evaluates the first form in the body of the lambda expression using the augmented environment. Any other forms in the lambda expression body are just ignored.
+
+(simple-eval '((lambda (l) (cons (car (cdr l)) (cons (car l) '()))) '(a b)))
+
+> ((lambda (l) (cons (car (cdr l)) (cons (car l) '()))) '(a b))    ENV: nil
+> (SIMPLE-APPLY (LAMBDA (L) (CONS (CAR (CDR L)) (CONS (CAR L) 'NIL))) ((A B)) NIL)  ENV: nil
+    Bind L -> (A B)
+    Evaluate (first subform of) body in augmented environment:
+    > (SIMPLE-EVAL (CONS (CAR (CDR L)) (CONS (CAR L) 'NIL)) ((L . (A B))))  ENV: ((L . (A B)))
+
+The 2nd case in SIMPLE-APPLY for a CONS operator is an odd version of DEFUN that is more like Scheme! Furthermore, the function defined by DEFUN only lasts through the evaluation of the current form. In fact, DEFUN in
+SIMPLE-EVAL has very little in common with Common Lisp's DEFUN:
+- Different syntax includes a literal LAMBDA expression.
+- Function definition is only temporary. A binding (ad hoc! Directly calls CONS.) is added to the environment associating the name with the LAMBDA expression. This binding is actually irrelevant for non-recursive functions.
+- Function is immediately invoked as part of evaluating DEFUN!
+- The function is invoked by calling SIMPLE-APPLY on the LAMBDA expression directly! The temporary binding in the environment is only consulted for recursive functions.
+
+On the other hand, CL-EVAL routes all function forms through CL-EVAL-CALL. This function either locates a function in the environment or falls back to built-in functions in the CL package (or previously user-defined functions
+too, I guess)!
+
+If the retrieved function is a lambda expression, CL-EVAL-LAMBDA turns it into a function object. Then CL-EVAL-CALL simply uses CL:APPLY to invoke the function
+
+For LAMBDA expressions, CL-EVAL takes a weird detour, wrapping the body of the LAMBDA expression in a closure with a single &REST parameter to grab all of the args passed to the original expression:
+Original lambda expression:
+((lambda (l) (cons (car (cdr l)) (cons (car l) 'nil))) '(a b))
+Output of CL-EVAL-LAMBDA
+#'(lambda (&rest args)
+    (cl-eval-sequence '((cons (car (cdr l)) (cons (car l) 'nil)))   ; <--- Body. Multiple subforms will get evaluated unlike SIMPLE-EVAL
+                  (bind-variables '(l) args env)))
+
+CL-EVAL-CALL then calls CL:APPLY to invoke this function on a list of evaluated args:
+(apply func2 (mapcar #'(lambda (arg) (cl-eval arg env)) (cdr exp)))) )
+
+So the original LAMBDA list is gone, but when FUNC2 is applied the bindings are baked into the environment created by BIND-VARIABLES.
+
+Of course, there is a great deal of circularity in both implementations. "Implementing" the IF special operator relies on the underlying COMMON-LISP:IF. Furthermore, there are many special operators/macros that are simply ignored:
+MULTIPLE-VALUE-CALL, TAGBODY, CATCH/THROW.
+
+One curious omission, however, is the FUNCTION special operator. I struggled to implement FUNCTION for lexical functions and to create closures via #'(lambda ...). It's easy to simulate with literal LAMBDA expressions, but I need
+to understand the underlying machinery better--particularly in terms of how closures capture bindings. COERCE/EVAL/COMPILE all operate with null lexical environment.
+
+The overall design of both top-level functions is kind of haphazard. It would be clearer if he had followed the language definition:
+
+3 types of forms (http://www.lispworks.com/documentation/HyperSpec/Body/03_aba.htm)
+- Symbols
+- CONSes
+- Self-evaluating objects
+
+4 types of CONSes (http://www.lispworks.com/documentation/HyperSpec/Body/03_abab.htm)
+- Special forms
+- Macro forms
+- Function forms
+- Lambda forms
+
+I used this structure when I redesigned and extended both SIMPLE-EVAL and CL-EVAL.
+
+I also created a pretty thorough set of automated tests for each to validate my implementations.
+
