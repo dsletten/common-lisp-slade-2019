@@ -74,12 +74,20 @@
           do (incf (aref trials (random rng)))
           finally (return trials))))
 
-(defun chi-squared (trials)
-  (let ((expected (/ (reduce #'+ trials) (length trials))))
-    (flet ((square-diff (x y)
-             (let ((diff (- x y)))
-               (* diff diff))))
-      (coerce (loop for bin across trials summing (/ (square-diff bin expected) expected)) 'double-float))))
+(defun chi-squared (trials &optional (expected (make-array (length trials) :initial-element (/ (reduce #'+ trials) (length trials)))) )
+  (flet ((square-diff (x y)
+           (let ((diff (- x y)))
+             (* diff diff))))
+    (coerce (loop for bin across trials
+                  for expect across expected
+                  summing (/ (square-diff bin expect) expect)) 'double-float)))
+
+;; (defun chi-squared (trials)
+;;   (let ((expected (/ (reduce #'+ trials) (length trials))))
+;;     (flet ((square-diff (x y)
+;;              (let ((diff (- x y)))
+;;                (* diff diff))))
+;;       (coerce (loop for bin across trials summing (/ (square-diff bin expected) expected)) 'double-float))))
 
 (defun test-cl-random (range n)
   (let ((trials (make-array range :initial-element 0))
