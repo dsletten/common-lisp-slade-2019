@@ -26,8 +26,7 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-;(load "/home/slytobias/lisp/packages/test.lisp")
-(load "/Users/dsletten/lisp/packages/test.lisp")
+(load "/home/slytobias/lisp/packages/test.lisp")
 
 (defpackage :random-generator
   (:use :common-lisp :test)
@@ -74,6 +73,9 @@
           do (incf (aref trials (random rng)))
           finally (return trials))))
 
+;;;
+;;;    Ex. 14.8.11/12
+;;;    
 (defun chi-squared (trials &optional (expected (make-array (length trials) :initial-element (/ (reduce #'+ trials) (length trials)))) )
   (flet ((square-diff (x y)
            (let ((diff (- x y)))
