@@ -26,9 +26,8 @@
 ;;;;   Notes:
 ;;;;
 ;;;;
-;(load "/home/slytobias/lisp/packages/test.lisp")
-(load "/Users/dsletten/lisp/packages/test.lisp")
-(load "/Users/dsletten/lisp/packages/strings.lisp")
+(load "/home/slytobias/lisp/packages/test.lisp")
+(load "/home/slytobias/lisp/packages/strings.lisp")
 
 (defpackage :arrays (:use :common-lisp :test :strings))
 
