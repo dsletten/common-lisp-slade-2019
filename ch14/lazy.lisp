@@ -63,6 +63,8 @@
 (defun odd-numbers (n)
   (cons n (delay (odd-numbers (+ n 2)))) )
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defclass lazy-2d-array ()
   ((rows :initarg :rows :reader rows)
    (columns :initarg :columns :reader columns)
@@ -100,6 +102,10 @@
   (check-array-bounds a i j) ; AROUND method?
   (aref (lazy-ref a i) j))
 
+;;;
+;;;    When reading or writing an array element ensure that the appropriate part
+;;;    of the array has been reified.
+;;;    
 (defmethod lazy-ref :before ((a lazy-2d-array) (i integer))
   (with-slots (array) a
     (when (delayed-p (aref array i))
@@ -132,7 +138,7 @@
    (fill-value :initform nil :accessor fill-value)
    (fill-flag :initform nil :accessor fill-flag)
    (contents))
-  (:documentation "N-dimensional array."))
+  (:documentation "N-dimensional lazy array."))
 
 (defun make-lazy-nd-array (&rest dimensions)
   (make-instance 'lazy-nd-array :dimensions dimensions))
@@ -140,23 +146,24 @@
 (defmethod initialize-instance :after ((a lazy-nd-array) &rest initargs)
   (declare (ignore initargs))
   (with-slots (contents dimensions) a
-    (setf contents (make-array (first dimensions)))
-    (dotimes (i (first dimensions))
-      (setf (aref contents i) (delay (reify (rest dimensions)))) )))
+    (setf contents (reify-dimension a dimensions))))
 
 ;;;
-;;;    We don't know the indices at which these subarrays will be located.
-;;;    Simply collect them here.
+;;;    Reify next dimension of the lazy array. Returns a vector to instantiate the dimension.
+;;;    If this is not the final dimension, then fill with DELAY objects capable of reifying the next dimension when needed.
+;;;    For final dimension, fill with FILL-VALUE as appropriate.
 ;;;    
-(defun reify (dimensions)
-  (loop for dimension in dimensions collect (make-array dimension)))
-
-;; (defun initialize-array (dimension dimensions)
-;;   (let ((a (make-array dimension)))
-;;     (unless (null dimensions)
-;;       (dotimes (i dimension)
-;;         (setf (aref a i) (initialize-array (first dimensions) (rest dimensions)))) )
-;;     a))
+(defun reify-dimension (a dimensions)
+  (assert (not (null dimensions)) () "No dimension to reify. Empty dimensions list.")
+  (with-slots (fill-value fill-flag) a
+    (destructuring-bind (dimension . more) dimensions
+      (let ((contents (make-array dimension)))
+        (if (null more)
+            (if fill-flag
+                (fill contents fill-value)
+                contents)
+            (dotimes (i dimension contents)
+              (setf (aref contents i) (delay (reify-dimension a more)))) )))) )
 
 (defmethod rank ((a lazy-nd-array))
   (length (dimensions a)))
@@ -169,6 +176,10 @@
 (defun lazy-nd-array-p (obj)
   (typep obj 'lazy-nd-array))
 
+;;;
+;;;    The read/write methods below are essentially the same as for the non-lazy N-dimensional array.
+;;;    Once the subarrays have been FORCEd, the indexing is the same either way.
+;;;    
 (defmethod lazy-nd-ref ((a lazy-nd-array) &rest indexes)
   (force-lazy-nd-ref a indexes)
   (with-slots (contents) a
@@ -178,16 +189,19 @@
   (validate-indexes-n a indexes)
   (call-next-method))
 
+;;;
+;;;    Ensure that the indexed element actually exists before attempting to read or write it.
+;;;    (This has to be done every time?!)
+;;;    
 (defmethod force-lazy-nd-ref ((a lazy-nd-array) (indexes list))
+  (labels ((force-dimension (a indexes)
+             (unless (endp indexes)
+               (destructuring-bind (index . more) indexes
+               (when (delayed-p (aref a index))
+                 (setf (aref a index) (force (aref a index))))
+               (force-dimension (aref a index) more)))) )
   (with-slots (contents) a
-    (when (delayed-p (aref contents (first indexes)))
-      (let ((final-dimension (reduce #'(lambda (v args) 
-                                         (destructuring-bind (index . vector) args 
-                                           (setf (aref v index) vector))) ; Each vector becomes next arg to REDUCE.
-                                     (mapcar #'cons indexes (force (aref contents (first indexes)))) ; Ignore last index...
-                                     :initial-value contents)))
-        (when (fill-flag a)
-          (fill final-dimension (fill-value a)))) )))
+    (force-dimension contents indexes))))
 
 (defun validate-indexes-n (a indexes)
   (with-slots (dimensions) a
@@ -197,16 +211,11 @@
           for index in indexes
           do (assert (<= 0 index (1- dimension))
               ()
-              "lazy-nd-ref error. Dimension ~D value: ~D is out of range (0-~D)" i index (1- dimension)))) ) ; ??????
+              "lazy-nd-ref error. Dimension ~D value: ~D is out of range (0-~D)" i index (1- dimension)))) )
 
-(defmethod lazy-nd-array-fill ((a lazy-nd-array) val)
- (setf (fill-flag a) t
-       (fill-value a) val))
- ;; (with-slots (array) a
- ;;   (loop for v across array
- ;;         unless (delayed-p v)
- ;;         do (fill v val))))
-
+;;;
+;;;    Too klunky...
+;;;    
 ;; (defmethod (setf lazy-nd-ref) (val (a lazy-nd-array) &rest indexes)
 ;;   (force-lazy-nd-ref a indexes)
 ;;   (with-slots (contents) a
@@ -225,26 +234,14 @@
   (cond ((null dimensions) (setf (aref a dimension) val))
         (t (set-nested-array (aref a dimension) (first dimensions) (rest dimensions) val))))
 
-;;;;
-(defmethod nd-array-fill ((a lazy-nd-array) val)
-  (with-slots (dimensions contents) a
-    (fill-array contents (first dimensions) (rest dimensions) val)))
-
-(defun fill-array (a dimension dimensions val)
-  (cond ((null dimensions) (fill a val))
-        (t (dotimes (i dimension)
-             (fill-array (aref a i) (first dimensions) (rest dimensions) val)))) )
-
-(defun map-nd-array (a f)
-  (with-slots (dimensions (array-a contents)) a
-    (let ((b (apply #'make-nd-array dimensions)))
-      (with-slots ((array-b contents)) b
-        (map-array array-a array-b (first dimensions) (rest dimensions) f))
-      b)))
-
-(defun map-array (a b dimension dimensions f)
-  (cond ((null dimensions) (dotimes (i dimension)
-                             (setf (aref b i)
-                                   (funcall f (aref a i)))) )
-        (t (dotimes (i dimension)
-             (map-array (aref a i) (aref b i) (first dimensions) (rest dimensions) f)))) )
+(defmethod lazy-nd-array-fill ((a lazy-nd-array) val)
+  (setf (fill-flag a) t
+        (fill-value a) val)
+  (labels ((fill-array (a)
+             (dotimes (i (length a))
+               (if (vectorp (aref a i))
+                   (fill-array (aref a i))
+                   (unless (delayed-p (aref a i))
+                     (setf (aref a i) val)))) ))
+    (with-slots (contents) a
+      (fill-array contents))))

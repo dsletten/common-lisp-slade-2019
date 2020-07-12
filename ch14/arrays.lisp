@@ -210,12 +210,15 @@
           for index in indexes
           do (assert (<= 0 index (1- dimension))
               ()
-              "nd-ref error. Dimension ~D value: ~D is out of range (0-~D)" i index dimension))))
+              "nd-ref error. Dimension ~D value: ~D is out of range (0-~D)" i index (1- dimension)))) )
 
 (defmethod (setf nd-ref) :around (val (a nd-array) &rest indexes)
   (validate-indexes-n a indexes)
   (call-next-method))
 
+;;;
+;;;    See Slade's solution. His one good idea!
+;;;    
 (defmethod (setf nd-ref) (val (a nd-array) &rest indexes)
   (with-slots (array) a
     (set-nested-array array (first indexes) (rest indexes) val)))
