@@ -216,13 +216,13 @@
 (defun two-in-row (g opponent)
   (labels ((find-two-in-row (player filled)
              (dotimes (cell-to-take 8 nil)
-               (let ((patterns (aref two-in-row cell-to-take)))
-                 (multiple-value-bind (i j) (index->cell cell-to-take)
-                   (map nil #'(lambda (pattern)
-                                (unless (logtest filled (aref cells-array i j)) ; Ignore if already filled
+               (multiple-value-bind (i j) (index->cell cell-to-take)
+                 (unless (logtest filled (aref cells-array i j)) ; Ignore if already filled
+                   (let ((patterns (aref two-in-row cell-to-take)))
+                     (map nil #'(lambda (pattern)
                                   (when (= pattern (logand player pattern))
-                                    (return (aref cells-array i j)))) )
-                        patterns)))) ))
+                                    (return (aref cells-array i j)))) 
+                          patterns)))) )))
     (with-slots (board) g
       (with-slots (filled human) board
         (ecase opponent
@@ -233,13 +233,13 @@
   (with-slots (board) g
     (with-slots (filled human) board
       (dotimes (cell-to-block 7 nil)
-        (let ((patterns (aref sneak-attacks cell-to-block)))
-          (multiple-value-bind (i j) (index->cell cell-to-block)
-            (map nil #'(lambda (pattern)
-                         (unless (logtest filled (aref cells-array i j)) ; Ignore if already filled
+        (multiple-value-bind (i j) (index->cell cell-to-block)
+          (unless (logtest filled (aref cells-array i j)) ; Ignore if already filled
+            (let ((patterns (aref sneak-attacks cell-to-block)))
+              (map nil #'(lambda (pattern)
                            (when (= pattern (logand human pattern))
-                             (return (aref cells-array i j)))) )
-                 patterns)))) )))
+                             (return (aref cells-array i j))))
+                   patterns)))) ))))
 
 (defun winp (g opponent)
   "Did somebody win?"

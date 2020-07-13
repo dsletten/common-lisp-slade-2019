@@ -164,6 +164,18 @@
         (computer-move g))))
   g)
 
+;;;
+;;;    It is theoretically possible for the human to be able win on the final move:
+;;;  O | X | O 
+;;; -----------
+;;;  O | X | O 
+;;; -----------
+;;;  X |   | X
+;;;
+;;;    Of course, this is a nonsensical arrangement since the human could have won on the
+;;;    previous move if the computer made this many mistakes. This program would not allow
+;;;    this state to occur.
+;;;    
 (defun computer-move (g)
   (with-slots (game-over-p board turn) g
     (with-slots (filled human) board
@@ -189,26 +201,20 @@
                                        (setf game-over-p t))
                                       (t (incf turn)))) )))) ))))
 
-(defun any-old-cell (filled)
-  (let ((preferences '((0 0) (0 2) (2 2) (2 0) (0 1) (1 2) (2 1) (1 0))))
-    (dolist (preference preferences)
-      (destructuring-bind (i j) preference
-        (unless (filledp filled (aref cells-array i j))
-          (return (aref cells-array i j)))) )))
-
 (defun index->cell (i)
   (values-list (aref #((0 0) (0 1) (0 2) (1 2) (2 2) (2 1) (2 0) (1 0) (1 1)) i)))
 
 (defun two-in-row (g opponent)
   (labels ((find-two-in-row (player filled)
-             (dotimes (cell-to-take 8 nil)
-               (let ((patterns (aref two-in-row cell-to-take)))
-                 (multiple-value-bind (i j) (index->cell cell-to-take)
-                   (map nil #'(lambda (pattern)
-                                (unless (filledp filled (aref cells-array i j))
-                                  (when (equal pattern (bit-and player pattern))
-                                    (return (aref cells-array i j)))) )
-                        patterns)))) ))
+             (dotimes (cell-to-take 8 nil) ; Center assumed filled already!
+               (multiple-value-bind (i j) (index->cell cell-to-take)
+                 (let ((index (aref cells-array i j)))
+                   (unless (filledp filled index)
+                     (let ((patterns (aref two-in-row cell-to-take)))
+                       (map nil #'(lambda (pattern)
+                                    (when (equal pattern (bit-and player pattern))
+                                      (return index)))
+                            patterns)))) ))))
     (with-slots (board) g
       (with-slots (filled human) board
         (ecase opponent
@@ -219,13 +225,22 @@
   (with-slots (board) g
     (with-slots (filled human) board
       (dotimes (cell-to-block 7 nil)
-        (let ((patterns (aref sneak-attacks cell-to-block)))
-          (multiple-value-bind (i j) (index->cell cell-to-block)
-            (map nil #'(lambda (pattern)
-                         (unless (filledp filled (aref cells-array i j))
-                           (when (equal pattern (bit-and human pattern))
-                             (return (aref cells-array i j)))) )
-                 patterns)))) )))
+        (multiple-value-bind (i j) (index->cell cell-to-block)
+          (let ((index (aref cells-array i j)))
+            (unless (filledp filled index)
+              (let ((patterns (aref sneak-attacks cell-to-block)))
+                (map nil #'(lambda (pattern)
+                             (when (equal pattern (bit-and human pattern))
+                               (return index)))
+                     patterns)))) )))) )
+
+(defun any-old-cell (filled)
+  (let ((preferences '((0 0) (0 2) (2 2) (2 0) (0 1) (1 2) (2 1) (1 0))))
+    (dolist (preference preferences)
+      (destructuring-bind (i j) preference
+        (let ((index (aref cells-array i j)))
+          (unless (filledp filled index)
+            (return index)))) )))
 
 (defun winp (g opponent)
   "Did somebody win?"
