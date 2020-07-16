@@ -11,7 +11,12 @@
 ;;;;   Modifications:
 ;;;;
 ;;;;   Purpose:
+;;;;   Simplifies the learning process by reducing board states to their fundamentals.
+;;;;   In essence, there are only 3 types of cells: center, corner, edge.
 ;;;;
+;;;;   The response to the human player opening with the upper-left corner is no different
+;;;;   than opening with the lower-right corner. This SYMMETRIC-LEARNER rotates the initial
+;;;;   state so that there are effectively only 3 opening moves.
 ;;;;
 ;;;;
 ;;;;   Calling Sequence:
